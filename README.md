@@ -71,10 +71,5 @@ varsayılan kapalı, Refine'e basmadan ağ çağrısı yok).
 
 Mimari ileride OCR (Tesseract.js) eklenebilecek şekilde hazırdır (`src/pdf/parser.js`).
 
-## Demo
+## MADE BY E.M.N STUDİO
 
-[Live Demo] — GitHub Pages URL'ini buraya yapıştır.
-
-## License
-
-MIT
