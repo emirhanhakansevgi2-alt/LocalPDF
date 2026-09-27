@@ -1,0 +1,207 @@
+﻿<!DOCTYPE html>
+<html lang="tr" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LocalPDF — AI'sız PDF Özetleyici</title>
+<meta name="description" content="Belgelerini yerelde özetle. AI yok. Yükleme yok. PDF'in bilgisayarından asla çıkmaz.">
+<link rel="stylesheet" href="css/styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="logo">📄 <b>Local</b>PDF</div>
+  <span class="tag">AI'sız PDF Özetleyici</span>
+  <div class="sp"></div>
+  <button class="iconbtn" id="themeBtn" title="Koyu/Açık tema">🌙</button>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <h1>Yerelde özetle. <span>AI yok. Yükleme yok.</span></h1>
+    <p><b>"PDF'in bilgisayarından asla çıkmaz."</b><br>PDF → Yerel İşleme → Klasik NLP (TF-IDF + TextRank) → Özet. Varsayılanda hiçbir AI çağrısı yok.</p>
+    <div class="badges"><span>✓ AI yok (varsayılan)</span><span>✓ Yükleme yok</span><span>✓ Gizli</span><span>✓ Açık Kaynak</span><span>✓ Tamamen Yerel</span><span>🤖 İsteğe bağlı AI</span></div>
+  </section>
+
+  <section class="drop" id="dropzone">
+    <div class="big">📥 Dosyanı buraya bırak</div>
+    <div class="mut">PDF • DOCX • TXT • MD • HTML &nbsp;|&nbsp; En fazla 60MB &nbsp;|&nbsp; UTF-8 &nbsp;|&nbsp; ❌ ZIP / klasör okunmaz</div>
+    <div class="btnrow"><button class="btn" id="chooseBtn">Dosya Seç</button></div>
+    <div class="mut" id="fileMeta">Henüz dosya seçilmedi</div>
+    <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md,.markdown,.html,.htm,.text" hidden>
+  </section>
+
+  <div class="progress" id="progressWrap"><div class="ptrack"><div class="pfill" id="bar"></div></div><div class="mut" id="barLabel" style="margin-top:8px">0%</div></div>
+  <div class="analyzing" id="analyzing"><div class="spin"></div><b>Belge analiz ediliyor… (tamamen yerel)</b></div>
+
+  <section class="dash" id="dash">
+    <h2 id="docTitle">📄 belge</h2>
+    <div class="meta"><span id="langBadge">Türkçe</span> • seçmeli özet • cümleler belgeden seçilir, uydurulmaz</div>
+    <div class="modes">
+      <b>Özet Uzunluğu:</b>
+      <label class="pill"><input type="radio" name="mode" value="short"> Kısa (%5-10)</label>
+      <label class="pill"><input type="radio" name="mode" value="medium" checked> Orta (%15-25)</label>
+      <label class="pill"><input type="radio" name="mode" value="long"> Uzun (%30-40)</label>
+      <label class="pill"><input type="checkbox" id="bullet"> Madde İşaretleri</label>
+      <label class="pill">📖 <input type="number" id="wpm" value="220" min="100" max="400" step="10" style="width:70px"> kelime/dk</label>
+      <label class="pill">Belge dili:
+        <select id="docLang"><option value="auto">Otomatik</option><option value="tr">Türkçe</option><option value="en">İngilizce</option></select>
+      </label>
+      <button class="btn ghost" id="resetBtn">Sıfırla</button>
+    </div>
+
+    <div class="card"><h3>📝 Özet</h3><div id="summaryList"></div></div>
+    <div class="grid2">
+      <div class="card"><h3>📌 Önemli Noktalar</h3><ul id="keyPoints"></ul></div>
+      <div class="card"><h3>🔑 Anahtar Kelimeler</h3><div id="kwList"></div></div>
+    </div>
+    <div class="card"><h3>📊 İstatistikler</h3><div id="statsGrid"></div></div>
+    <div class="card"><h3>📑 Bölüm Özetleri</h3><div id="sections"><p class="muted">Başlık bulunamazsa bu alan boş kalır.</p></div></div>
+    <div class="card"><h3>📋 Kopyala</h3>
+      <div class="btnrow" style="justify-content:flex-start">
+        <button class="btn ghost" id="copySum">Özeti Kopyala</button>
+        <button class="btn ghost" id="copyKw">Kelimeleri Kopyala</button>
+        <button class="btn ghost" id="copyAll">Tüm Analizi Kopyala</button>
+      </div>
+    </div>
+    <div class="card"><h3>💾 Dışa Aktar</h3>
+      <div class="btnrow" style="justify-content:flex-start">
+        <button class="btn ghost" id="expTxt">TXT</button>
+        <button class="btn ghost" id="expMd">Markdown</button>
+        <button class="btn ghost" id="expJson">JSON</button>
+        <button class="btn ghost" id="expPdf">PDF (Yazdır)</button>
+      </div>
+    </div>
+
+    <div class="card ai" id="aiCard">
+      <h3>🤖 Kendi Yapay Zekâna Bağla: Token Düşürme Rehberi <span class="aibadge" id="aiBadge">KAPALI — %100 yerel</span></h3>
+      <p class="muted">Eğer bu sistemi <b>kendi yapay zekânda token harcamasını düşürmek için</b> kullanmak istersen, LocalPDF'yi yapay zekânın <b>ön filtresi</b> yap: belgenin tamamını yapay zekâya göndermek yerine, yerel motor en önemli cümleleri seçer, yapay zekâya <b>sadece onlar</b> gider. Aynı kalite, ~%90-97 daha az token. Detaylar için başlıklara dokun:</p>
+
+      <details open>
+        <summary><b>📌 Bu sistem tam olarak nedir?</b></summary>
+        <p>LocalPDF, belgeni <b>yapay zekâ kullanmadan</b> özetleyen bir ön işlem motorudur. İçinde yapay zekâ modeli, API anahtarı, dış servis yoktur. Sadece klasik matematik çalışır: <b>TF-IDF</b> (hangi kelime bu belgede önemli), <b>TextRank</b> (hangi cümle diğer cümlelerle en bağlantılı), cümle konumu, başlık benzerliği ve paragraf önemi. Her cümleye puan verir, en yüksek puanlıları seçer. Yeni cümle kurmaz, bilgi uydurmaz — özet, belgeden birebir seçilmiş cümlelerdir ve her birinin <b>sayfa numarası</b> bellidir.</p>
+        <p>Yapay zekâlı sistemlerdeki yerin şudur: <b>yapay zekânın önüne takılan akıllı huni.</b> Yapay zekâ pahalı ve kota sınırlı bir kaynaktır; LocalPDF bedava ve sınırsız ön eleme yapar, yapay zekâ sadece son dokunuşu atar.</p>
+      </details>
+
+      <details>
+        <summary><b>🔌 Yapay zekâ nasıl bağlanır? (4 adım)</b></summary>
+        <p><b>1. Yerelde özetle (0 token):</b> Belgeyi yükle. Motor belgeyi puanlar, yapay zekâya hiçbir şey gitmez.</p>
+        <p><b>2. En iyi K cümleyi al:</b> Kısa mod + K=5-8 önerilir. Örnek: 8.000 kelimelik PDF → 8 cümle (~250 token).</p>
+        <p><b>3. Yapay zekâya sadece onları gönder:</b> Komutu kilitle — "sadece bu cümleleri kullan, yeni bilgi uydurma, sayfa numaralarını koru." Tek küçük istek atılır.</p>
+        <p><b>4. Cevabı kaynağıyla göster:</b> "… [Sayfa 4]" referansları korunur. Anahtar kelimeler (~20 token) bedava ek bağlam olarak eklenir.</p>
+        <p>Kod karşılığı: <span class="kbd">extract()</span> → <span class="kbd">summarize({mode:"short"})</span> → ilk K cümle → yapay zekâ. Tam JS + Python örnekleri <b>docs/AI-ENTEGRASYON.md</b> dosyasında.</p>
+      </details>
+
+      <details>
+        <summary><b>🏢 Nerelerde kullanılır?</b></summary>
+        <ul>
+          <li><b>Şirket içi asistanlar (RAG):</b> 500 sayfalık prosedür dokümanının tamamını her soruda göndermek yerine, ilgili cümleleri seçip gönder. Soru başına maliyet kuruşlara düşer.</li>
+          <li><b>Müşteri destek botları:</b> Kullanım kılavuzundan ilgili bölümü yerelde bul, bota sadece orayı ver. Yanıt hızlanır, fatura küçülür.</li>
+          <li><b>Hukuk / mevzuat taraması:</b> Sözleşmenin kritik maddeleri yerelde seçilir, yapay zekâ sadece "bu madde ne diyor" diye açıklar. Tam metin dışarı çıkmaz.</li>
+          <li><b>Akademik / tez çalışması:</b> Makale yığınının özetlerini yerelde çıkar, yapay zekâya sadece karşılaştırma sor.</li>
+          <li><b>Çağrı merkezi:</b> Görüşme dökümünü yerelde özetle, yapay zekâya sadece duygu/niyet analizi yaptır.</li>
+          <li><b>Haber / rapor takibi:</b> Günlük 100 PDF'in özetini bedava çıkar, yapay zekâya sadece "bugünün 3 önemli başlığı ne" diye sor.</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><b>💰 Avantajları neler?</b></summary>
+        <table class="toktab">
+          <tr><th>Yöntem (8.000 kelimelik PDF)</th><th>Giden token*</th><th>Oran</th></tr>
+          <tr><td>Belgenin tamamını göndermek</td><td>~10.400</td><td>%100</td></tr>
+          <tr><td><b>LocalPDF filtresi (K≈8, önerilen)</b></td><td><b>~250</b></td><td><b>~%2-3</b></td></tr>
+          <tr><td>Sadece anahtar kelimeler</td><td>~20</td><td>~%0,2</td></tr>
+        </table>
+        <ul>
+          <li><b>Maliyet:</b> token başına ödeyen servislerde fatura ~%97 düşer. 1.000 belge × tam metin yerine 1.000 × 250 token.</li>
+          <li><b>Hız:</b> küçük istekler daha hızlı döner; kullanıcı beklemez.</li>
+          <li><b>Kota dostu:</b> ücretsiz/ucuz planların günlük limitleri yetmeye başlar.</li>
+          <li><b>Daha az uydurma:</b> model koca belge yerine 8 cümleyle çalışır, kilitli komutla birleşince uydurma riski azalır.</li>
+          <li><b>Gizlilik:</b> belgenin tamamı dışarı çıkmaz; sadece seçili cümleler, o da sen istersen gider.</li>
+          <li><b>Kaynak takibi:</b> her cümlenin sayfa numarası belli, cevap denetlenebilir olur.</li>
+        </ul>
+        <p class="muted" style="font-size:12px">*token ≈ kelime × 1,3. Aşağıdaki panel tahmini canlı hesaplar.</p>
+      </details>
+
+      <details>
+        <summary><b>❓ Sık sorulan sorular</b></summary>
+        <p><b>K sayısı kaç olmalı?</b> Soru-cevap için 5-8, detaylı rapor için 10-15. Az K = az token, çok K = çok bağlam.</p>
+        <p><b>Hangi yapay zekâ ile çalışır?</b> Hepsiyle. Panel OpenAI uyumlu adres kullanır; adres ve model kutularını değiştirmen yeterli.</p>
+        <p><b>API anahtarım güvende mi?</b> Anahtar tarayıcından çıkmaz; sadece "Cilala"ya basarsan senin yazdığın adrese gider. "Anahtarı Unut" ile silebilirsin.</p>
+        <p><b>Belgem yapay zekâya gider mi?</b> Hayır — varsayılanda hiçbir şey gitmez. Açarsan bile belgenin tamamı değil, seçili K cümle gider.</p>
+        <p><b>İnternet yoksa ne olur?</b> Özetleme çalışmaya devam eder; sadece yapay zekâ adımı internet ister.</p>
+      </details>
+
+      <hr style="border:0;border-top:1px dashed var(--line);margin:14px 0">
+      <p class="muted" style="font-size:13px"><b>Canlı demo:</b> aşağıdaki panel yukarıdaki akışın çalışan halidir — K cümle seçer, token tahminini gösterir, tek tıkla senin adresine gönderir. Varsayılan kapalıdır.</p>
+      <div class="aigrid">
+        <div class="muted" style="font-size:13px;line-height:1.7">
+          <b>Özet akış:</b><br>
+          1️⃣ Yerel özet tüm belgeyi puanlar (0 token).<br>
+          2️⃣ En iyi K cümle alınır (~200-400 token).<br>
+          3️⃣ Yapay zekâ bunları akıcı dile çevirir (en fazla 500 token).<br>
+          ⚠️ Açıkken seçili cümleler <b>senin adresine</b> gider — tam gizlilik için kapalı tut.
+        </div>
+        <div>
+          <label class="pill"><input type="checkbox" id="aiToggle"> Yapay zekâ cilası (isteğe bağlı)</label>
+          <div style="display:grid;gap:8px;margin-top:10px">
+            <input id="aiEndpoint" value="https://api.openai.com/v1/chat/completions" placeholder="Adres (OpenAI uyumlu)" style="width:100%">
+            <div style="display:flex;gap:8px">
+              <input id="aiModel" value="gpt-4o-mini" placeholder="model" style="flex:1">
+              <label class="pill" title="Yapay zekâya gönderilecek cümle sayısı">K: <input type="number" id="aiK" value="8" min="3" max="15" style="width:55px"></label>
+            </div>
+            <input id="aiKey" type="password" placeholder="API anahtarı (sende kalır)" style="width:100%">
+            <label class="muted" style="font-size:12px"><input type="checkbox" id="aiRemember"> anahtarı bu tarayıcıda hatırla (yoksa sadece oturumluk)</label>
+            <div class="muted" id="aiEstimate" style="font-size:13px">Token tahmini: önce belge yükleyin.</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn" id="aiRefine">✨ Yapay zekâ ile cilala (az token)</button>
+              <button class="btn ghost" id="aiForget">Anahtarı Unut</button>
+            </div>
+            <div id="aiOut" class="muted" style="font-size:14px;line-height:1.6"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card priv">
+    <h3>🔒 Gizlilik</h3>
+    <ul>
+      <li><b>Varsayılanda belge içeriği hiçbir uzak yapay zekâ servisine gönderilmez.</b></li>
+      <li><b>İşlem yerelde olur</b> — PDF okuma + klasik dil işleme, tamamı tarayıcıda.</li>
+      <li><b>Hesap gerekmez.</b></li>
+      <li>🤖 Yapay zekâ cilası <b>isteğe bağlıdır</b>: sadece anahtarı girip düğmeye basarsan, seçili K cümle senin adresine gider. Açmazsan sıfır ağ isteği.</li>
+    </ul>
+    <h3>⌨️ Kısayollar</h3>
+    <p><span class="kbd">Ctrl+O</span> aç &nbsp; <span class="kbd">Ctrl+Enter</span> Analiz &nbsp; <span class="kbd">Ctrl+Shift+C</span> Kopyala &nbsp; <span class="kbd">Ctrl+S</span> Dışa aktar &nbsp; <span class="kbd">Esc</span> Kapat</p>
+    <h3>🧠 Kendi yapay zekâ sistemine nasıl eklersin?</h3>
+    <p class="muted">Çekirdek bilerek <b>yapay zekâsız</b> tutuldu ki ön filtre görevi görsün: <b>1)</b> belgeyi yerelde özetle (0 token), <b>2)</b> en iyi K cümleyi al, <b>3)</b> yapay zekâya sadece onları gönder, <b>4)</b> cevabı sayfa numaralarıyla göster. Kod örnekleri ve maliyet hesabı: <b>docs/AI-ENTEGRASYON.md</b>. Yukarıdaki kart bu akışın canlı demosudur.</p>
+  </section>
+
+  <footer>LocalPDF • Açık Kaynak • MIT • v1.2 — "PDF'in bilgisayarından asla çıkmaz (yapay zekâyı SEN açmadıkça)."</footer>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="src/language/turkish.js"></script>
+<script src="src/language/english.js"></script>
+<script src="src/language/detector.js"></script>
+<script src="src/summarizer/tfidf.js"></script>
+<script src="src/summarizer/textrank.js"></script>
+<script src="src/summarizer/scorer.js"></script>
+<script src="src/summarizer/summarizer.js"></script>
+<script src="src/pdf/parser.js"></script>
+<script src="src/pdf/extractor.js"></script>
+<script src="src/export/txt.js"></script>
+<script src="src/export/markdown.js"></script>
+<script src="src/export/json.js"></script>
+<script src="src/export/pdf.js"></script>
+<script src="src/ui/upload.js"></script>
+<script src="src/ui/results.js"></script>
+<script src="src/ui/settings.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
